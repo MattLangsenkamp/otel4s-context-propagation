@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: "prometheus" # scrape prometheus itself to collect the internal metrics (e.g. scrape stats, etc)
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "otel-collector" # scrape metrics from the OpenTelemetry collector
+    static_configs:
+      - targets: ["otel-collector:8889"]

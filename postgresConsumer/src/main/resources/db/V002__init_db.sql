@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS postgres_messages(
+    id SERIAL PRIMARY KEY NOT NULL,
+    message VARCHAR(256) NOT NULL
+);

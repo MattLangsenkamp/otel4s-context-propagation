@@ -1,0 +1,152 @@
+version: '3.9'
+
+services:
+  grpc:
+    image: mattlangsenkamp/oteldemo-grpc
+    restart: always
+    container_name: grpc
+    ports:
+      - "9999:9999"
+    depends_on:
+      - kafka1
+  http:
+    image: mattlangsenkamp/oteldemo-http
+    container_name: http
+    ports:
+      - "8080:8080"
+    depends_on:
+      - grpc
+  elastic_consumer:
+    image: mattlangsenkamp/oteldemo-elastic-consumer
+    restart: always
+    container_name: elastic_consumer
+    depends_on:
+      - kafka1
+      - elasticsearch
+  postgres_consumer:
+    restart: always
+    image: mattlangsenkamp/oteldemo-postgres-consumer
+    container_name: postgres_consumer
+    depends_on:
+      - kafka1
+      - postgres
+  cassandra_consumer:
+    restart: always
+    image: mattlangsenkamp/oteldemo-cassandra-consumer
+    container_name: cassandra_consumer
+    depends_on:
+      - kafka1
+      - cassandra
+
+  kafka1:
+    image: confluentinc/cp-kafka
+    container_name: kafka1
+    hostname: kafka1
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_LISTENERS: 'INTERNAL://kafka1:29092,CONTROLLER://kafka1:29093,EXTERNAL://kafka1:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka1:29092,EXTERNAL://kafka1:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:29093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A=='
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.1
+    environment:
+      [
+        'ES_JAVA_OPTS=-Xms2g -Xmx2g',
+        'bootstrap.memory_lock=true',
+        'discovery.type=single-node',
+        'xpack.security.enabled=false',
+        'xpack.security.enrollment.enabled=false'
+      ]
+
+    ports:
+      - 9200:9200
+    #networks:
+    #  - elastic
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.1
+    container_name: kibana
+    environment:
+      XPACK_APM_SERVICEMAPENABLED: "true"
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: d1a66dfd-c4d3-4a0a-8290-2abcb83ab3aa
+      LOGGING_ROOT_LEVEL: error
+
+    ports:
+      - 5601:5601
+    #networks:
+    #  - elastic
+
+  postgres:
+    container_name: postgres
+    image: postgres:15.4
+    restart: always
+    environment:
+      POSTGRES_USER: oteldemo
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  cassandra:
+    container_name: cassandra
+    image: cassandra:latest
+    restart: always
+    ports:
+      - "9042:9042"
+
+  otel-collector:
+    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib
+    command: [ --config=/etc/otel-collector-config.yaml ]
+    volumes:
+      - "./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml"
+    ports:
+      - "8888:8888" # Prometheus metrics exposed by the collector
+      - "8889:8889" # Prometheus exporter metrics
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP http receiver
+  jaeger:
+    container_name: jaeger
+    # stores traces received from the OpenTelemetry Collector 
+    image: jaegertracing/all-in-one:latest
+    volumes:
+      - "./config/jaeger-ui.json:/etc/jaeger/jaeger-ui.json"
+    command: --query.ui-config /etc/jaeger/jaeger-ui.json
+    environment:
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://prometheus:9090
+    ports:
+      - "14250:14250"
+      - "16685:16685" # GRPC
+      - "16686:16686" # UI
+  prometheus:
+    container_name: prometheus
+    # scrapes metrics from the OpenTelemetry Collector
+    image: prom/prometheus:latest
+    volumes:
+      - "./config/prometheus.yml:/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+
+networks:
+  default:
+    name: oteldemo-network

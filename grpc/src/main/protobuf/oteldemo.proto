@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package com.mattlangsenkamp;
+
+message BrokerRequest {
+    string message = 1;
+}
+
+message BrokerResponse {
+    string message = 1;
+}
+
+service BrokerPreprocessor {
+    rpc processAndPushToBroker(BrokerRequest) returns (BrokerResponse) {}
+}

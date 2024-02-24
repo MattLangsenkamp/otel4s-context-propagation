@@ -3,26 +3,32 @@ package com.mattlangsenkamp.oteldemo.http
 import cats.*, cats.implicits.*, cats.syntax.*
 import cats.effect.*, cats.effect.implicits.*, cats.effect.syntax.*
 import org.http4s.ember.server.EmberServerBuilder
-import com.comcast.ip4s.{host, port}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.*
+import org.http4s.otel4s.middleware.{ServerMiddleware => OtelServerMiddleware}
+import com.comcast.ip4s.{host, port}
+
+import fs2.grpc.syntax.all.*
 import io.grpc.netty.shaded.io.grpc.netty.{NettyChannelBuilder}
-import fs2.grpc.syntax.all._
 import io.grpc.ManagedChannel
-import com.mattlangsenkamp.oteldemo.BrokerPreprocessorFs2Grpc
 import io.grpc.Metadata
-import com.mattlangsenkamp.oteldemo.BrokerRequest
-import org.http4s.server.middleware.RequestLogger
-import org.http4s.server.middleware.ResponseLogger
+
 import org.typelevel.otel4s.Otel4s
 import org.typelevel.otel4s.java.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.context.syntax.*
+
 import io.opentelemetry.api.GlobalOpenTelemetry
-import org.http4s.otel4s.middleware.{ServerMiddleware => OtelServerMiddleware}
 import io.opentelemetry.api.OpenTelemetry
-import com.mattlangsenkamp.oteldemo.grpctracing.GrpcTracing.withTracingHeaders
+
+import com.mattlangsenkamp.oteldemo.core.Core.*
+import com.mattlangsenkamp.oteldemo.{
+  BrokerResponse,
+  BrokerRequest,
+  BrokerPreprocessorFs2Grpc
+}
+import com.mattlangsenkamp.oteldemo.grpctracing.GrpcTracing.given
 
 object Main extends IOApp.Simple:
 
@@ -43,23 +49,19 @@ object Main extends IOApp.Simple:
     val routes = HttpRoutes.of[IO] {
 
       case POST -> Root / "api" / "v1" / "push_message" :? Message(message) =>
-        withTracingHeaders { meta =>
-          brokerPreprocessor
-            .processAndPushToBroker(
-              BrokerRequest(message = message),
-              ctx = meta
-            )
+        withTracingCarrier[IO, Metadata, BrokerResponse]("grpc client") {
+          meta =>
+            brokerPreprocessor
+              .processAndPushToBroker(
+                BrokerRequest(message = message),
+                ctx = meta
+              )
         }
           .flatMap(br => Ok(br.message))
     }
 
-  private def otelResource: Resource[IO, Otel4s[IO]] =
-    Resource
-      .eval(IO.delay(GlobalOpenTelemetry.get))
-      .evalMap(OtelJava.forAsync[IO])
-
   def run =
-    otelResource
+    otelResource[IO]
       .use { otel4s =>
         otel4s.tracerProvider.get("inference-service").flatMap { trace =>
           given Tracer[IO] = trace

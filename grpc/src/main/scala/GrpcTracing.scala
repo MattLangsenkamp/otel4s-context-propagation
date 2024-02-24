@@ -6,9 +6,20 @@ import org.typelevel.otel4s.trace.*
 import org.typelevel.otel4s.Attribute
 import collection.convert.ImplicitConversions.*
 import java.lang
-import org.typelevel.otel4s.context.propagation.TextMapGetter
+import org.typelevel.otel4s.context.propagation.{TextMapGetter, TextMapUpdater}
+import scala.annotation.meta.setter
+import cats.kernel.Monoid
+import com.mattlangsenkamp.oteldemo.core.Core.withTracingCarrier
 
 object GrpcTracing:
+
+  given metaMonoid: Monoid[Metadata] with
+    def combine(x: Metadata, y: Metadata): Metadata =
+      val m = empty
+      m.merge(x)
+      m.merge(y)
+      m
+    def empty: Metadata = new Metadata()
 
   given getter: TextMapGetter[Metadata] with
     def get(carrier: Metadata, key: String): Option[String] =
@@ -17,7 +28,14 @@ object GrpcTracing:
       )
     def keys(carrier: Metadata): Iterable[String] = carrier.keys().toSeq
 
-  def withTracingHeaders[A](body: Metadata => IO[A])(using
+  given setter: TextMapUpdater[Metadata] with
+    def updated(carrier: Metadata, key: String, value: String): Metadata =
+      val m = Monoid[Metadata].empty
+      m.merge(carrier)
+      m.put(Metadata.Key.of(key, Metadata.ASCII_STRING_MARSHALLER), value)
+      m
+
+  /*def withTracingHeaders[A](body: Metadata => IO[A])(using
       tracer: Tracer[IO]
   ): IO[A] =
     IO.uncancelable { poll =>
@@ -89,4 +107,4 @@ object GrpcTracing:
                 }
               }
           }
-      }
+      }*/

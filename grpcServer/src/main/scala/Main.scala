@@ -25,7 +25,9 @@ import org.typelevel.otel4s.trace.SpanKind
 import org.typelevel.otel4s.trace.Span
 import org.typelevel.otel4s.Attribute
 import cats.effect.kernel.Resource
-import com.mattlangsenkamp.oteldemo.grpctracing.GrpcTracing.fromTracingHeaders
+import com.mattlangsenkamp.oteldemo.core.Core.{given, *}
+import com.mattlangsenkamp.oteldemo.grpctracing.GrpcTracing.given
+import com.mattlangsenkamp.oteldemo.kafkatracing.KafkaTracing.given
 
 object Main extends IOApp.Simple:
 
@@ -44,27 +46,26 @@ object Main extends IOApp.Simple:
           request: BrokerRequest,
           ctx: Metadata
       ): IO[BrokerResponse] =
-        ctx.fromTracingHeaders { s =>
+        fromTracingCarrier(ctx, "grpc server"): s =>
           val kafkaSpan =
             tracer.spanBuilder("kafkaProduce").withParent(s.context).build
           for
-            rand <- Random.scalaUtilRandom[IO]
-            millisecondsToWait <- rand
-              .betweenInt(500, 2500)
-              .map(_.milliseconds)
-            _ <- IO.sleep(millisecondsToWait)
-            message = s"waited for ${millisecondsToWait} milliseconds"
-            wow <- kafkaSpan.surround {
-              val pee = ProducerRecord(topic_name, "message", message)
-              pee.headers
-              producer
-                .produceOne(
-                  ProducerRecord(topic_name, "message", message)
-                )
-                .flatten
-            }
+            message <- randomSleep[IO](500, 2500)
+            _ <-
+              withTracingCarrier[IO, Headers, ProducerResult[String, String]](
+                "push to broker"
+              ): carrier =>
+                producer
+                  .produceOne(
+                    ProducerRecord(
+                      topic_name,
+                      "message",
+                      s"gRPC preprocessor: $message\t"
+                    )
+                      .withHeaders(carrier)
+                  )
+                  .flatten
           yield (BrokerResponse(message = message))
-        }
 
   def brokerPreprocessorService(
       producer: PartitionsFor[IO, String, String]
@@ -85,35 +86,31 @@ object Main extends IOApp.Simple:
     )
     .useForever
 
-  private def otelResource: Resource[IO, Otel4s[IO]] =
-    Resource
-      .eval(IO.delay(GlobalOpenTelemetry.get))
-      .evalMap(OtelJava.forAsync[IO])
-
   def run =
-    otelResource
-      .use { otel4s =>
-        otel4s.tracerProvider.get("inference-service").flatMap { trace =>
-          given Tracer[IO] = trace
-          kafkaAdminClientResource("kafka1:9092")
-            .use { client =>
-              for
-                topics <- client.listTopics.names
-                topic_exists = topics.contains(topic_name)
-                _ <-
-                  if !topic_exists then
-                    client.createTopic(NewTopic(topic_name, 1, 1.toShort))
-                  else IO.unit
-              yield ()
-            }
-            .flatMap { yea =>
-              KafkaProducer
-                .stream(producerSettings)
-                .flatMap { producer =>
-                  fs2.Stream.eval(brokerPreprocessorService(producer).use(run))
-                }
-                .compile
-                .drain
-            }
-        }
-      }
+    otelResource[IO]
+      .use: otel4s =>
+        otel4s.tracerProvider
+          .get("otel-demo")
+          .flatMap: trace =>
+            given Tracer[IO] = trace
+            kafkaAdminClientResource("kafka1:9092")
+              .use { client =>
+                for
+                  topics <- client.listTopics.names
+                  topic_exists = topics.contains(topic_name)
+                  _ <-
+                    if !topic_exists then
+                      client.createTopic(NewTopic(topic_name, 1, 1.toShort))
+                    else IO.unit
+                yield ()
+              }
+              .flatMap: yea =>
+                KafkaProducer
+                  .stream(producerSettings)
+                  .flatMap { producer =>
+                    fs2.Stream.eval(
+                      brokerPreprocessorService(producer).use(run)
+                    )
+                  }
+                  .compile
+                  .drain

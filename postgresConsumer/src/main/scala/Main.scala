@@ -1,7 +1,5 @@
 package com.mattlangsenkamp.oteldemo.postgresconsumer
 
-import cats.effect.IOApp
-import fs2.kafka.*
 import cats.effect.*, cats.effect.implicits.*, cats.effect.syntax.*
 import cats.*, cats.implicits.*, cats.syntax.*
 
@@ -18,6 +16,16 @@ import skunk.codec.all.*
 import natchez.Trace.Implicits.*
 import skunk.*
 import com.comcast.ip4s.Literals.port
+import io.opentelemetry.api.GlobalOpenTelemetry
+
+import fs2.kafka.*
+
+import com.mattlangsenkamp.oteldemo.core.Core.*
+import com.mattlangsenkamp.oteldemo.kafkatracing.KafkaTracing.{given, *}
+
+import org.typelevel.otel4s.Otel4s
+import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.trace.Tracer
 
 object Main extends IOApp.Simple:
   val consumerSettings =
@@ -25,11 +33,6 @@ object Main extends IOApp.Simple:
       .withAutoOffsetReset(AutoOffsetReset.Earliest)
       .withBootstrapServers("kafka1:9092")
       .withGroupId("postgres_consumer")
-
-  def processRecord(
-      record: ConsumerRecord[String, String]
-  ): IO[(String, String)] =
-    IO.pure(record.key -> record.value)
 
   def runFlywayMigration: IO[MigrateResult] =
     Fly4s
@@ -42,9 +45,8 @@ object Main extends IOApp.Simple:
           locations = List(MigrationLocation("db"))
         )
       )
-      .use { fw =>
+      .use: fw =>
         fw.baseline *> fw.migrate
-      }
 
   def skunkSessionPool: Resource[IO, Resource[IO, Session[IO]]] =
     Session.pooled[IO](
@@ -63,20 +65,34 @@ object Main extends IOApp.Simple:
         """.command
 
   def run =
-    runFlywayMigration *>
-      skunkSessionPool.use { sessionPool =>
-        KafkaConsumer
-          .stream(consumerSettings)
-          .subscribeTo("preprocessed_messages")
-          .records
-          .mapAsync(25) { committable =>
-            IO.println(committable.record) *>
-              processRecord(committable.record).flatMap { case (key, value) =>
-                sessionPool.use { session =>
-                  session.prepare(insertMessage).flatMap(_.execute(value))
-                }
-              }
-          }
-          .compile
-          .drain
-      }
+    otelResource[IO]
+      .use: otel4s =>
+        otel4s.tracerProvider
+          .get("inference-service")
+          .flatMap: trace =>
+            given Tracer[IO] = trace
+            runFlywayMigration *>
+              skunkSessionPool.use: sessionPool =>
+                KafkaConsumer
+                  .stream(consumerSettings)
+                  .subscribeTo("preprocessed_messages")
+                  .records
+                  .mapAsync(25) { committable =>
+                    fromTracingCarrier(
+                      committable.record.headers,
+                      "postgres consumer"
+                    ): s =>
+                      val (key, value) = processRecord(committable.record)
+                      randomSleep[IO](500, 2500).flatMap: message =>
+                        val newVal = s"$value postgres consumer: $message"
+                        trace
+                          .spanBuilder("persist to postgres")
+                          .withParent(s.context)
+                          .build
+                          .surround(sessionPool.use: session =>
+                            session
+                              .prepare(insertMessage)
+                              .flatMap(_.execute(newVal)))
+                  }
+                  .compile
+                  .drain

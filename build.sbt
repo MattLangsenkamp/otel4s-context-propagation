@@ -22,10 +22,7 @@ val dockerImageName =
 ThisBuild / scalaVersion := scala3Version
 
 val observabilityDependencies = Seq(
-  "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
   "ch.qos.logback" % "logback-classic" % logbackClassicVersion % Runtime,
-  "org.typelevel" %% "otel4s-core" % otel4sVersion,
-  "org.typelevel" %% "otel4s-java" % otel4sVersion,
   "io.opentelemetry" % "opentelemetry-exporter-otlp" % openTelemetryVersion % Runtime,
   "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure" % openTelemetryVersion % Runtime
 )
@@ -85,14 +82,13 @@ lazy val grpcServer = project
     docker / imageNames := Seq(ImageName("mattlangsenkamp/oteldemo-grpc"))
   )
   .enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging)
-  .dependsOn(grpc)
+  .dependsOn(grpc, kafka)
 
 lazy val elasticConsumer = project
   .in(file("elasticConsumer"))
   .settings(
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
-      "com.github.fd4s" %% "fs2-kafka" % fs2KafkaVersion,
       "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % elastic4sVersion,
       "com.sksamuel.elastic4s" % "elastic4s-effect-cats_3" % elastic4sVersion
     ),
@@ -114,6 +110,7 @@ lazy val elasticConsumer = project
       ImageName("mattlangsenkamp/oteldemo-elastic-consumer")
     )
   )
+  .dependsOn(kafka)
   .enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging)
 
 lazy val postgresConsumer = project
@@ -121,7 +118,6 @@ lazy val postgresConsumer = project
   .settings(
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
-      "com.github.fd4s" %% "fs2-kafka" % fs2KafkaVersion,
       "org.tpolecat" %% "skunk-core" % skunkVersion,
       "com.github.geirolz" %% "fly4s" % fly4sVersion,
       "org.postgresql" % "postgresql" % postgresVersion,
@@ -144,6 +140,7 @@ lazy val postgresConsumer = project
       ImageName("mattlangsenkamp/oteldemo-postgres-consumer")
     )
   )
+  .dependsOn(kafka)
   .enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging)
 
 lazy val cassandraConsumer = project
@@ -151,7 +148,6 @@ lazy val cassandraConsumer = project
   .settings(
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
-      "com.github.fd4s" %% "fs2-kafka" % fs2KafkaVersion,
       "org.apache.cassandra" % "java-driver-core" % cassandraDriverVersion
     ),
     libraryDependencies ++= observabilityDependencies,
@@ -172,6 +168,7 @@ lazy val cassandraConsumer = project
       ImageName("mattlangsenkamp/oteldemo-cassandra-consumer")
     )
   )
+  .dependsOn(kafka)
   .enablePlugins(sbtdocker.DockerPlugin, JavaAppPackaging)
 
 lazy val grpc =
@@ -183,13 +180,22 @@ lazy val grpc =
     .dependsOn(core)
     .enablePlugins(Fs2Grpc)
 
+lazy val kafka =
+  project
+    .in(file("kafka"))
+    .settings(
+      version := "0.1.0-SNAPSHOT",
+      libraryDependencies += "com.github.fd4s" %% "fs2-kafka" % fs2KafkaVersion
+    )
+    .dependsOn(core)
+
 lazy val core = project
   .in(file("core"))
   .settings(
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
+      "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
       "org.typelevel" %% "cats-effect" % "3.5.3",
-      "org.typelevel" %% "cats-core" % "2.10.0",
       "org.typelevel" %% "otel4s-core" % otel4sVersion,
       "org.typelevel" %% "otel4s-java" % otel4sVersion
     )

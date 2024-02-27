@@ -55,19 +55,20 @@ object Main extends IOApp.Simple:
                       "elastic consumer"
                     ): s =>
                       val (key, value) = processRecord(committable.record)
-                      randomSleep[IO](500, 2500).flatMap: message =>
-                        trace
-                          .spanBuilder("persist to elastic search")
-                          .withParent(s.context)
-                          .build
-                          .surround(
-                            client.execute:
-                              indexInto("elastic_messages")
-                                .fields(
-                                  key -> s"$value elastic consumer: $message"
-                                )
-                                .refresh(RefreshPolicy.Immediate)
-                          )
+                      IO.raiseError(new RuntimeException("woah!!!")) *>
+                        randomSleep[IO](500, 2500).flatMap: message =>
+                          trace
+                            .spanBuilder("persist to elastic search")
+                            .withParent(s.context)
+                            .build
+                            .surround(
+                              client.execute:
+                                indexInto("elastic_messages")
+                                  .fields(
+                                    key -> s"$value elastic consumer: $message"
+                                  )
+                                  .refresh(RefreshPolicy.Immediate)
+                            )
                   }
                   .compile
                   .drain

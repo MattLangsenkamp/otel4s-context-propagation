@@ -47,10 +47,8 @@ object Main extends IOApp.Simple:
           ctx: Metadata
       ): IO[BrokerResponse] =
         fromTracingCarrier(ctx, "grpc server"): s =>
-          val kafkaSpan =
-            tracer.spanBuilder("kafkaProduce").withParent(s.context).build
           for
-            message <- randomSleep[IO](500, 2500)
+            sleepMessage <- randomSleep[IO](500, 2500)
             _ <-
               withTracingCarrier[IO, Headers, ProducerResult[String, String]](
                 "push to broker"
@@ -60,12 +58,12 @@ object Main extends IOApp.Simple:
                     ProducerRecord(
                       topic_name,
                       "message",
-                      s"gRPC preprocessor: $message\t"
+                      s"message: ${request.message} gRPC preprocessor: $sleepMessage\t"
                     )
                       .withHeaders(carrier)
                   )
                   .flatten
-          yield (BrokerResponse(message = message))
+          yield (BrokerResponse(message = sleepMessage))
 
   def brokerPreprocessorService(
       producer: PartitionsFor[IO, String, String]

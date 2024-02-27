@@ -50,14 +50,13 @@ object Main extends IOApp.Simple:
 
       case POST -> Root / "api" / "v1" / "push_message" :? Message(message) =>
         withTracingCarrier[IO, Metadata, BrokerResponse]("grpc client") {
-          meta =>
+          metaCarrier =>
             brokerPreprocessor
               .processAndPushToBroker(
                 BrokerRequest(message = message),
-                ctx = meta
+                ctx = metaCarrier
               )
-        }
-          .flatMap(br => Ok(br.message))
+        }.flatMap(br => Ok(br.message))
     }
 
   def run =

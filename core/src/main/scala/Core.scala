@@ -64,14 +64,14 @@ object Core:
       body: C => F[O]
   ): F[O] =
     MonadCancelThrow[F].uncancelable: poll =>
-      val meta = Monoid[C].empty
+      val carrier = Monoid[C].empty
       Tracer[F]
         .spanBuilder(spanName)
         .withSpanKind(SpanKind.Client)
         .build
         .use: span =>
           for
-            traceHeaders <- Tracer[F].propagate(meta)
+            traceHeaders <- Tracer[F].propagate(carrier)
             resp <- poll(body(traceHeaders)).guaranteeCase:
               case Outcome.Succeeded(fa) =>
                 span.addAttribute(Attribute("exit.case", "succeeded"))

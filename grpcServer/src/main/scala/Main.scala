@@ -17,7 +17,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.Otel4s
 import io.opentelemetry.api.GlobalOpenTelemetry
-import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.oteljava.OtelJava
 import collection.convert.ImplicitConversions.*
 import io.grpc.Metadata.AsciiMarshaller
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller
@@ -63,7 +63,7 @@ object Main extends IOApp.Simple:
                       .withHeaders(carrier)
                   )
                   .flatten
-          yield (BrokerResponse(message = sleepMessage))
+          yield (BrokerResponse(message = f"$sleepMessage\n"))
 
   def brokerPreprocessorService(
       producer: PartitionsFor[IO, String, String]
@@ -85,7 +85,8 @@ object Main extends IOApp.Simple:
     .useForever
 
   def run =
-    otelResource[IO]
+    OtelJava
+      .autoConfigured[IO]()
       .use: otel4s =>
         otel4s.tracerProvider
           .get("otel-demo")

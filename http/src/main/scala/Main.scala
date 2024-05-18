@@ -14,7 +14,7 @@ import io.grpc.ManagedChannel
 import io.grpc.Metadata
 
 import org.typelevel.otel4s.Otel4s
-import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.context.syntax.*
@@ -60,8 +60,9 @@ object Main extends IOApp.Simple:
     }
 
   def run =
-    otelResource[IO]
-      .use { otel4s =>
+    OtelJava
+      .autoConfigured[IO]()
+      .use: otel4s =>
         otel4s.tracerProvider.get("inference-service").flatMap { trace =>
           given Tracer[IO] = trace
           brokerPreprocessorResource.use { brokerPreprocessor =>
@@ -82,4 +83,3 @@ object Main extends IOApp.Simple:
             ).useForever
           }
         }
-      }

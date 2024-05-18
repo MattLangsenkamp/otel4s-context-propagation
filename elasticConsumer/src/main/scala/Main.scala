@@ -9,14 +9,14 @@ import com.sksamuel.elastic4s.requests.searches.SearchResponse
 import com.sksamuel.elastic4s.{ElasticClient, ElasticProperties}
 import com.sksamuel.elastic4s.ElasticDsl.*
 import fs2.kafka.*
-import com.mattlangsenkamp.oteldemo.core.Core.{fromTracingCarrier, otelResource}
+import com.mattlangsenkamp.oteldemo.core.Core.fromTracingCarrier
 import com.mattlangsenkamp.oteldemo.kafkatracing.KafkaTracing.{
   processRecord,
   given
 }
 import org.typelevel.otel4s.Otel4s
 import io.opentelemetry.api.GlobalOpenTelemetry
-import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 import com.mattlangsenkamp.oteldemo.core.Core.*
 
@@ -33,7 +33,8 @@ object Main extends IOApp.Simple:
   } { esClient => IO.delay(esClient.close()) }
 
   def run =
-    otelResource[IO]
+    OtelJava
+      .autoConfigured[IO]()
       .use: otel4s =>
         otel4s.tracerProvider
           .get("otel-demo")

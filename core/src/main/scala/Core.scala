@@ -10,7 +10,7 @@ import org.typelevel.otel4s.context.propagation.TextMapPropagator
 import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.Otel4s
 import io.opentelemetry.api.GlobalOpenTelemetry
-import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.oteljava.OtelJava
 import cats.effect.std.Random
 import scala.concurrent.duration.*
 
@@ -25,11 +25,6 @@ object Core:
       _ <- Async[F].sleep(millisecondsToWait)
       message = s"waited for ${millisecondsToWait}"
     yield message
-
-  def otelResource[F[_]: Async: LiftIO]: Resource[F, Otel4s[F]] =
-    Resource
-      .eval(Sync[F].delay(GlobalOpenTelemetry.get))
-      .evalMap(OtelJava.forAsync[F])
 
   def fromTracingCarrier[
       F[_]: Tracer: Concurrent,

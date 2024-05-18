@@ -11,7 +11,7 @@ import com.mattlangsenkamp.oteldemo.core.Core.*
 import com.mattlangsenkamp.oteldemo.kafkatracing.KafkaTracing.{given, *}
 import org.typelevel.otel4s.Otel4s
 import io.opentelemetry.api.GlobalOpenTelemetry
-import org.typelevel.otel4s.java.OtelJava
+import org.typelevel.otel4s.oteljava.OtelJava
 import org.typelevel.otel4s.trace.Tracer
 
 object Main extends IOApp.Simple:
@@ -34,7 +34,8 @@ object Main extends IOApp.Simple:
     )(s => IO.delay(s.close()))
 
   def run =
-    otelResource[IO]
+    OtelJava
+      .autoConfigured[IO]()
       .use: otel4s =>
         otel4s.tracerProvider
           .get("inference-service")

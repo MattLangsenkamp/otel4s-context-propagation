@@ -1,7 +1,7 @@
 val scala3Version = "3.3.1"
 val http4sVersion = "0.23.25"
-val http4sMiddlewareVersion = "0.3.0"
-val otel4sVersion = "0.4.0"
+val http4sMiddlewareVersion = "0.7.0-beta.3"
+val otel4sVersion = "0.7.0"
 val fs2KafkaVersion = "3.2.0"
 val elastic4sVersion = "8.11.5"
 val skunkVersion = "0.6.0"
@@ -9,9 +9,10 @@ val fly4sVersion = "1.0.1"
 val postgresVersion = "42.7.0"
 val flywayPostgresVersion = "10.7.2"
 val cassandraDriverVersion = "4.18.0"
-val openTelemetryVersion = "1.34.0"
+val openTelemetryVersion = "1.38.0"
 val log4catsVersion = "2.6.0"
 val logbackClassicVersion = "1.2.11"
+val catsEffectVersion = "3.5.4"
 
 val javaOpts = "JAVA_OPTS" ->
   "-Dotel.java.global-autoconfigure.enabled=true -Dotel.service.name=otel-demo -Dotel.exporter.otlp.endpoint=http://otel-collector:4317"
@@ -195,8 +196,8 @@ lazy val core = project
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
       "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
-      "org.typelevel" %% "cats-effect" % "3.5.3",
+      "org.typelevel" %% "cats-effect" % catsEffectVersion,
       "org.typelevel" %% "otel4s-core" % otel4sVersion,
-      "org.typelevel" %% "otel4s-java" % otel4sVersion
+      "org.typelevel" %% "otel4s-oteljava" % otel4sVersion
     )
   )

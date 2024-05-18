@@ -35,7 +35,7 @@ GET elastic_messages/_search
 ### Postgres
 Log into postgres using something like DBeaver. Run the following query:
 ```
-select  * from postgres_messages;
+select * from postgres_messages;
 ```
 ### Cassandra
 Start a CQL session using docker
